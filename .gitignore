@@ -34,3 +34,4 @@ T4MVC.cs
 
 /NDependOut
 *.nupkg
+/.vs/
