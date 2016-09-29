@@ -190,6 +190,7 @@
       <Link>xunit.runner.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="BindingTest\applicationHost.config" />
     <None Include="default.runsettings" />
     <None Include="JexusManager.snk" />
     <None Include="packages.config" />
