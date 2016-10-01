@@ -3,8 +3,11 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
 using System;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using Microsoft.Web.Administration;
+using Microsoft.Web.Management.Utility;
 
 namespace Microsoft.Web.Administration
 {
@@ -56,6 +59,50 @@ namespace Microsoft.Web.Administration
             }
         }
 
+        private bool IsHttp
+        {
+            get
+            {
+                return string.Equals(this.Protocol, UriHelper.UriSchemeHttp, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+        internal static class UriHelper
+        {
+            public static readonly string UriSchemeHttp = "http";
+
+            public static readonly string UriSchemeHttps = "https";
+        }
+        private bool IsHttps
+        {
+            get
+            {
+                return string.Equals(this.Protocol, UriHelper.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        private void LoadBindingInfo()
+        {
+            this.IsIPPortHostBinding = false;
+            this._host = string.Empty;
+            this._endPoint = null;
+            var bindingInfo = (string) this["bindingInformation"];
+            if (string.IsNullOrEmpty(bindingInfo))
+            {
+                return;
+            }
+            //if (this.IsHttp || this.IsHttps)
+            {
+                string empty = string.Empty;
+                IPEndPoint iPEndPoint = BindingUtility.EndPointFromBindingInformation(bindingInfo, out empty);
+                if (iPEndPoint != null)
+                {
+                    this._host = empty;
+                    this._endPoint = iPEndPoint;
+                    this.IsIPPortHostBinding = true;
+                }
+            }
+        }
+
         private void Initialize()
         {
             if (_initialized)
@@ -64,13 +111,20 @@ namespace Microsoft.Web.Administration
             }
 
             _initialized = true;
-            var value = (string)this["bindingInformation"];
-            var last = value.LastIndexOf(':');
-            _host = value.Substring(last + 1);
-            var next = value.LastIndexOf(':', last - 1);
-            var port = value.Substring(next + 1, last - next - 1);
-            var address = value.Substring(0, next);
-            _endPoint = new IPEndPoint(address.DisplayToAddress(), Int32.Parse(port));
+
+            LoadBindingInfo();
+            if (!this.IsHttp || !this.IsHttps)
+            {
+                return;
+            }
+            //var value = (string)this["bindingInformation"];
+            //var last = value.LastIndexOf(':');
+            //_host = value.Substring(last + 1);
+            //var next = last > 0 ? value.LastIndexOf(':', last - 1) : -1;
+            //var length = last - next - 1;
+            //var port = length > 0 ? value.Substring(next + 1, length) : string.Empty;
+            //var address = next > 0 ? value.Substring(0, next) : string.Empty;
+            //_endPoint = new IPEndPoint(address.DisplayToAddress(), Int32.Parse(port));
             if (Protocol != "https" || CertificateHash != null)
             {
                 return;
@@ -188,5 +242,151 @@ namespace Microsoft.Web.Administration
                 return false;
             }
         }
+    }
+}
+
+
+
+namespace Microsoft.Web.Management.Utility
+{
+    internal static class BindingUtility
+    {
+        public static IPEndPoint EndPointFromBindingInformation(string bindingInformation)
+        {
+            string empty = string.Empty;
+            return BindingUtility.EndPointFromBindingInformation(bindingInformation, out empty);
+        }
+
+        public static IPEndPoint EndPointFromBindingInformation(string bindingInformation, out string hostHeader)
+        {
+            IPEndPoint result = null;
+            string text = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 0);
+            string s = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 1);
+            hostHeader = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 2);
+            int port = 0;
+            if (int.TryParse(s, out port))
+            {
+                try
+                {
+                    if (text == "*" || string.IsNullOrEmpty(text))
+                    {
+                        result = new IPEndPoint(IPAddress.Any, port);
+                    }
+                    else
+                    {
+                        IPAddress address = IPAddress.Parse(text);
+                        result = new IPEndPoint(address, port);
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+            return result;
+        }
+
+        public static bool IsIPAddressValid(string ipAddress, out string formattedIPAddressString)
+        {
+            formattedIPAddressString = string.Empty;
+            ipAddress = ipAddress.Trim();
+            if (ipAddress == "*")
+            {
+                formattedIPAddressString = "*";
+                return true;
+            }
+            IPAddress iPAddress;
+            if (!IPAddress.TryParse(ipAddress, out iPAddress))
+            {
+                return false;
+            }
+            formattedIPAddressString = iPAddress.ToString();
+            if (iPAddress.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                formattedIPAddressString = "[" + formattedIPAddressString + "]";
+            }
+            return true;
+        }
+
+        public static string ParseIPInfoFromBindingInformation(string bindingInformation, int returnItem)
+        {
+            string result = string.Empty;
+            string result2 = string.Empty;
+            string result3 = string.Empty;
+            string[] array = bindingInformation.Split(new char[]
+            {
+                ':'
+            });
+            if (array.Length == 3)
+            {
+                result = array[0];
+                result2 = array[1];
+                result3 = array[2];
+            }
+            else if (array.Length > 2)
+            {
+                int length = bindingInformation.LastIndexOf(':');
+                string text = bindingInformation.Substring(0, length);
+                int length2 = text.LastIndexOf(':');
+                result = bindingInformation.Substring(0, length2);
+                result2 = array[array.Length - 2];
+                result3 = array[array.Length - 1];
+            }
+            if (returnItem == 0)
+            {
+                return result;
+            }
+            if (returnItem == 1)
+            {
+                return result2;
+            }
+            if (returnItem == 2)
+            {
+                return result3;
+            }
+            return string.Empty;
+        }
+
+        public static void ParseIPInfoFromBindingInformation(string bindingInformation, out string ipAddress, out string port, out string hostHeader)
+        {
+            ipAddress = string.Empty;
+            port = string.Empty;
+            hostHeader = string.Empty;
+            string[] array = bindingInformation.Split(new char[]
+            {
+                ':'
+            });
+            if (array.Length == 3)
+            {
+                ipAddress = array[0];
+                port = array[1];
+                hostHeader = array[2];
+                return;
+            }
+            if (array.Length > 2)
+            {
+                int length = bindingInformation.LastIndexOf(':');
+                string text = bindingInformation.Substring(0, length);
+                int length2 = text.LastIndexOf(':');
+                ipAddress = bindingInformation.Substring(0, length2);
+                port = array[array.Length - 2];
+                hostHeader = array[array.Length - 1];
+            }
+        }
+
+        public static string ParseIPInfoFromBindingInformation(string bindingProtocol, string bindingInformation, int returnItem)
+        {
+            string text = CultureInfo.InvariantCulture.TextInfo.ToUpper(bindingProtocol);
+            if (text.Equals("HTTP") || text.Equals("HTTPS") || text.Equals("FTP"))
+            {
+                return BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, returnItem);
+            }
+            return string.Empty;
+        }
+
+        public static bool IsCentralCertStoreBinding(SslFlags sslFlags)
+        {
+            return (sslFlags & SslFlags.CentralCertStore) == SslFlags.CentralCertStore;
+        }
+
     }
 }
