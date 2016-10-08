@@ -15,7 +15,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
     {
         public static void TestIisBindingFixture(ServerManager server)
         {
-            Assert.Equal(8, server.ApplicationPools.Count);
+            Assert.Equal(9, server.ApplicationPools.Count);
             Assert.True(server.ApplicationPools.AllowsAdd);
             Assert.False(server.ApplicationPools.AllowsClear);
             Assert.False(server.ApplicationPools.AllowsRemove);
@@ -23,7 +23,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                 new[] { '\\', '/', '"', '|', '<', '>', ':', '*', '?', ']', '[', '+', '=', ';', ',', '@', '&' },
                 ApplicationPoolCollection.InvalidApplicationPoolNameCharacters());
 
-            Assert.Equal(3, server.Sites.Count);
+            Assert.Equal(4, server.Sites.Count);
             Assert.True(server.Sites.AllowsAdd);
             Assert.False(server.Sites.AllowsClear);
             Assert.False(server.Sites.AllowsRemove);
@@ -36,56 +36,59 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
 
             /*
              * Default Website Bindings
-            <binding protocol="http" bindingInformation="*:80:" />
-            <binding protocol="net.tcp" bindingInformation="808:*" />
-            <binding protocol="net.msmq" bindingInformation="localhost" />
-            <binding protocol="msmq.formatname" bindingInformation="localhost" />
-            <binding protocol="net.pipe" bindingInformation="*" />
+              <binding protocol="net.tcp" bindingInformation="808:*" />
+              <binding protocol="net.msmq" bindingInformation="localhost" />
+              <binding protocol="msmq.formatname" bindingInformation="localhost" />
+              <binding protocol="net.pipe" bindingInformation="*:80" />
+              <binding protocol="net.tcp" bindingInformation="*:808" />
+              <binding protocol="http" bindingInformation="*:808:" />
+              <binding protocol="https" bindingInformation="169.254.224.100:443:" sslFlags="0" />
+              <binding protocol="http" bindingInformation="169.254.224.100:80:www.tsharp.org" />
              */
             var bindings = server.Sites[0].Bindings;
 
             string[] expecteds = {
-                "*:80 (http)",
-                "* on *:808 (net.tcp)",
+                "808:* (net.tcp)",
                 "localhost (net.msmq)",
                 "localhost (msmq.formatname)",
-                "* (net.pipe)"
+                "*:80 (net.pipe)",
+                "*:808 (net.tcp)",
+                "*:808 (http)",
+                "169.254.224.100:443 (https)",
+                "www.tsharp.org on 169.254.224.100:80 (http)"
             };
 
             for (int i = 0, n = bindings.Count; i < n; i++)
             {
                 Assert.Equal(expecteds[i], bindings[i].ToShortString());
             }
-
-         
-            Assert.Equal("%IIS_USER_HOME%\\Logs", siteDefaults.LogFile.Directory);
+            
             Assert.Equal(LogFormat.W3c, siteDefaults.LogFile.LogFormat);
-            Assert.Equal("%IIS_USER_HOME%\\TraceLogFiles", siteDefaults.TraceFailedRequestsLogging.Directory);
-            Assert.True(siteDefaults.TraceFailedRequestsLogging.Enabled);
+            Assert.False(siteDefaults.TraceFailedRequestsLogging.Enabled);
             Assert.True(siteDefaults.LogFile.Enabled);
-            Assert.Equal("Clr4IntegratedAppPool", server.ApplicationDefaults.ApplicationPoolName);
+            Assert.Equal("DefaultAppPool", server.ApplicationDefaults.ApplicationPoolName);
 
             var pool = server.ApplicationPools[0];
 
             var model = pool.GetChildElement("processModel");
             var item = model["maxProcesses"];
-            Assert.Equal("Clr4IntegratedAppPool", pool.Name);
+            Assert.Equal("DefaultAppPool", pool.Name);
             Assert.Equal("v4.0", pool.ManagedRuntimeVersion);
             Assert.Equal(1, pool.ProcessModel.MaxProcesses);
             Assert.Equal(string.Empty, pool.ProcessModel.UserName);
 #if IIS
-            Assert.Equal(1L, item);
+            Assert.Equal(1U, item);
 #else
             Assert.Equal(1U, item);
 #endif
 
             // TODO: why it should be int.
 #if IIS
-            Assert.Equal(0, pool.GetAttributeValue("managedPipelineMode"));
+            Assert.Equal(0L, pool.GetAttributeValue("managedPipelineMode"));
             pool.SetAttributeValue("managedPipelineMode", 1);
-            Assert.Equal(1, pool.GetAttributeValue("managedPipelineMode"));
+            Assert.Equal(1L, pool.GetAttributeValue("managedPipelineMode"));
             pool.SetAttributeValue("managedPipelineMode", "Integrated");
-            Assert.Equal(0, pool.GetAttributeValue("managedPipelineMode"));
+            Assert.Equal(0L, pool.GetAttributeValue("managedPipelineMode"));
 #else
             Assert.Equal(0L, pool.GetAttributeValue("managedPipelineMode"));
             pool.SetAttributeValue("managedPipelineMode", 1);
@@ -102,22 +105,22 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
             Assert.Equal("Timespan value must be between 00:00:00 and 30.00:00:00 seconds inclusive, with a granularity of 60 seconds\r\n", time.Message);
 
             var site = server.Sites[0];
-            Assert.Equal("WebSite1", site.Name);
-            Assert.Equal(1, site.Bindings.Count);
-            var binding = site.Bindings[0];
+            Assert.Equal("Default Web Site", site.Name);
+            Assert.Equal(8, site.Bindings.Count);
+            var binding = site.Bindings[5];
             Assert.Equal(IPAddress.Any, binding.EndPoint.Address);
-            Assert.Equal(8080, binding.EndPoint.Port);
-            Assert.Equal("localhost", binding.Host);
-            Assert.Equal("*:8080:localhost", binding.ToString());
-            Assert.Equal(":8080:localhost", binding.BindingInformation);
+            Assert.Equal(808, binding.EndPoint.Port);
+            Assert.Equal("", binding.Host);
+            Assert.Equal("*:808:", binding.ToString());
+            Assert.Equal("*:808:", binding.BindingInformation);
             Assert.True(site.Bindings.AllowsAdd);
             Assert.True(site.Bindings.AllowsClear);
             Assert.False(site.Bindings.AllowsRemove);
-            Assert.Equal("%IIS_USER_HOME%\\Logs", site.LogFile.Directory);
+            Assert.Equal(null, site.LogFile.Directory);
 
-            var sslSite = server.Sites[1];
+            var sslSite = server.Sites[3];
             var sslBinding = sslSite.Bindings[1];
-            Assert.Equal(SslFlags.Sni, sslBinding.SslFlags);
+            Assert.Equal(SslFlags.None, sslBinding.SslFlags);
 
             var app = site.Applications[0];
             Assert.True(site.Applications.AllowsAdd);
@@ -126,7 +129,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
             Assert.Equal(
                 new[] { '\\', '?', ';', ':', '@', '&', '=', '+', '$', ',', '|', '"', '<', '>', '*' },
                 ApplicationCollection.InvalidApplicationPathCharacters());
-            Assert.Equal("Clr4IntegratedAppPool", app.ApplicationPoolName);
+            Assert.Equal("DefaultAppPool", app.ApplicationPoolName);
 
             Assert.Equal("/", app.Path);
             var vDir = app.VirtualDirectories[0];
@@ -143,7 +146,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                 var section = config.GetSection("system.applicationHost/log");
                 var mode = section.Attributes["centralLogFileMode"];
 #if IIS
-                Assert.Equal(0, mode.Value);
+                Assert.Equal(0L, mode.Value);
 #else
                 Assert.Equal(0L, mode.Value);
 #endif
@@ -155,7 +158,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                 ConfigurationSection defaultDocumentSection = config.GetSection("system.webServer/defaultDocument");
                 Assert.Equal(true, defaultDocumentSection["enabled"]);
                 ConfigurationElementCollection filesCollection = defaultDocumentSection.GetCollection("files");
-                Assert.Equal(6, filesCollection.Count);
+                Assert.Equal(7, filesCollection.Count);
 
                 var errorsSection = config.GetSection("system.webServer/httpErrors");
                 var errorsCollection = errorsSection.GetCollection();
@@ -178,25 +181,15 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
             {
                 var config = server.GetApplicationHostConfiguration();
                 var locations = config.GetLocationPaths();
-                Assert.Equal(3, locations.Length);
+                Assert.Equal(1, locations.Length);
 
-                var exception =
-                    Assert.Throws<FileNotFoundException>(
-                        () =>
-                        config.GetSection(
-                            "system.webServer/security/authentication/anonymousAuthentication",
-                            "Default Web Site"));
-                Assert.Equal(
-                    "Filename: \r\nError: Unrecognized configuration path 'MACHINE/WEBROOT/APPHOST/Default Web Site'\r\n\r\n",
-                    exception.Message);
-                Assert.Equal(null, exception.FileName);
-
+             
                 var anonymousSection = config.GetSection(
                     "system.webServer/security/authentication/anonymousAuthentication",
-                    "WebSite2");
+                    "vcdesign");
                 var anonymousEnabled = (bool)anonymousSection["enabled"];
                 Assert.True(anonymousEnabled);
-                Assert.Equal("test", anonymousSection["userName"]);
+                Assert.Equal("IUSR", anonymousSection["userName"]);
 
                 // Assert.Equal("123456", anonymousSection["password"]);
             }
@@ -206,7 +199,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                 var config = server.GetApplicationHostConfiguration();
 
                 // enable Windows authentication
-                var windowsSection = config.GetSection("system.webServer/security/authentication/windowsAuthentication", "WebSite1");
+                var windowsSection = config.GetSection("system.webServer/security/authentication/windowsAuthentication", "virtocommerce.cn");
                 Assert.Equal(OverrideMode.Inherit, windowsSection.OverrideMode);
                 Assert.Equal(OverrideMode.Deny, windowsSection.OverrideModeEffective);
                 Assert.Equal(false, windowsSection.IsLocked);
@@ -219,13 +212,13 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
 
                 {
                     // disable logging. Saved in applicationHost.config, as it cannot be overridden in web.config.
-                    ConfigurationSection httpLoggingSection = config.GetSection("system.webServer/httpLogging", "WebSite1");
+                    ConfigurationSection httpLoggingSection = config.GetSection("system.webServer/httpLogging", "virtocommerce.cn");
                     Assert.Equal(false, httpLoggingSection["dontLog"]);
                     httpLoggingSection["dontLog"] = true;
                 }
 
                 {
-                    ConfigurationSection httpLoggingSection = config.GetSection("system.webServer/httpLogging", "WebSite1/test");
+                    ConfigurationSection httpLoggingSection = config.GetSection("system.webServer/httpLogging", "virtocommerce.cn/test");
                     // TODO:
                     // Assert.Equal(true, httpLoggingSection["dontLog"]);
                     httpLoggingSection["dontLog"] = false;
@@ -274,57 +267,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
 
                 compression["doDynamicCompression"] = false;
 
-                {
-                    // disable default document. Saved to web.config as this section can be overridden anywhere.
-                    ConfigurationSection defaultDocumentSection = config.GetSection("system.webServer/defaultDocument");
-                    Assert.Equal(true, defaultDocumentSection["enabled"]);
-                    defaultDocumentSection["enabled"] = false;
-
-                    ConfigurationElementCollection filesCollection = defaultDocumentSection.GetCollection("files");
-                    Assert.Equal(7, filesCollection.Count);
-
-                    {
-                        var first = filesCollection[0];
-                        Assert.Equal("home1.html", first["value"]);
-                        Assert.True(first.IsLocallyStored);
-                    }
-
-                    var second = filesCollection[1];
-                    Assert.Equal("Default.htm", second["value"]);
-                    Assert.False(second.IsLocallyStored);
-
-                    var third = filesCollection[2];
-                    Assert.Equal("Default.asp", third["value"]);
-                    Assert.False(third.IsLocallyStored);
-
-                    ConfigurationElement addElement = filesCollection.CreateElement();
-                    addElement["value"] = @"home.html";
-                    filesCollection.AddAt(0, addElement);
-
-                    Assert.Equal(8, filesCollection.Count);
-
-                    {
-                        var first = filesCollection[0];
-                        Assert.Equal("home.html", first["value"]);
-                        // TODO: why?
-                        // Assert.False(first.IsLocallyStored);
-                    }
-
-                    filesCollection.RemoveAt(4);
-                    Assert.Equal(7, filesCollection.Count);
-
-                    ConfigurationElement lastElement = filesCollection.CreateElement();
-                    lastElement["value"] = @"home1.html";
-                    var dup = Assert.Throws<COMException>(() => filesCollection.Add(lastElement));
-                    Assert.Equal(
-                        "Filename: \r\nError: Cannot add duplicate collection entry of type 'add' with unique key attribute 'value' set to 'home1.html'\r\n\r\n",
-                        dup.Message);
-
-                    lastElement["value"] = @"home2.html";
-                    filesCollection.Add(lastElement);
-                    Assert.Equal(8, filesCollection.Count);
-                }
-
+                 
                 //{
                 //    var last = filesCollection[8];
                 //    Assert.Equal("home2.html", last["value"]);
@@ -338,14 +281,7 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                     Assert.Equal(false, httpLoggingSection["dontLog"]);
                     Assert.Throws<FileLoadException>(() => httpLoggingSection["dontLog"] = true);
                 }
-                {
-                    ConfigurationSection httpLoggingSection = config.GetSection(
-                        "system.webServer/httpLogging",
-                        "WebSite1/test");
-                    // TODO:
-                    //Assert.Equal(true, httpLoggingSection["dontLog"]);
-                    Assert.Throws<FileLoadException>(() => httpLoggingSection["dontLog"] = false);
-                }
+               
 
                 var errorsSection = config.GetSection("system.webServer/httpErrors");
                 Assert.Equal(OverrideMode.Inherit, errorsSection.OverrideMode);
@@ -392,122 +328,30 @@ namespace Microsoft.Web.AdministrationTests.BindingFixture
                 var old = hiddenSegmentsCollection[0];
                 hiddenSegmentsCollection.Remove(old);
 
-                var section = config.GetSection("system.webServer/rewrite/rules");
-                ConfigurationElementCollection collection = section.GetCollection();
-                //collection.Clear();
-                ////collection.Delete();
-
-                //collection = section.GetCollection();
-                //Assert.Equal(0, collection.Count);
-
-                var newElement = collection.CreateElement();
-                newElement["name"] = "test";
-                collection.Add(newElement);
-                Assert.Equal(2, collection.Count);
-
-                collection.Clear();
-                Assert.Equal(0, collection.Count);
-
-                newElement = collection.CreateElement();
-                newElement["name"] = "test";
-                collection.Add(newElement);
-                Assert.Equal(1, collection.Count);
+          
             }
 
-            {
-                // server config "Website1"
-                var config = server.GetApplicationHostConfiguration();
-
-                // enable Windows authentication
-                var windowsSection = config.GetSection("system.webServer/security/authentication/windowsAuthentication", "WebSite1");
-                Assert.Equal(OverrideMode.Inherit, windowsSection.OverrideMode);
-                Assert.Equal(OverrideMode.Deny, windowsSection.OverrideModeEffective);
-                Assert.Equal(false, windowsSection.IsLocked);
-                Assert.Equal(true, windowsSection.IsLocallyStored);
-
-                var windowsEnabled = (bool)windowsSection["enabled"];
-                Assert.False(windowsEnabled);
-            }
-
-            {
-                Configuration config = server.GetApplicationHostConfiguration();
-
-                var anonymousSection = config.GetSection(
-                    "system.webServer/security/authentication/anonymousAuthentication",
-                    "WebSite2");
-
-                // anonymousSection["userName"] = "test1";
-                // anonymousSection["password"] = "654321";
-                ConfigurationSection windowsAuthenticationSection =
-                    config.GetSection("system.webServer/security/authentication/windowsAuthentication", "WebSite2");
-                windowsAuthenticationSection["enabled"] = true;
-
-                ConfigurationElement extendedProtectionElement =
-                    windowsAuthenticationSection.GetChildElement("extendedProtection");
-                extendedProtectionElement["tokenChecking"] = @"Allow";
-                extendedProtectionElement["flags"] = @"None";
-
-                var exception = Assert.Throws<COMException>(() => extendedProtectionElement["tokenChecking"] = @"NotExist");
-                Assert.Equal("Enum must be one of None, Allow, Require\r\n", exception.Message);
-
-                exception = Assert.Throws<COMException>(() => extendedProtectionElement["flags"] = @"NotExist");
-                Assert.Equal("Flags must be some combination of None, Proxy, NoServiceNameCheck, AllowDotlessSpn, ProxyCohosting\r\n", exception.Message);
-
-                ConfigurationElementCollection extendedProtectionCollection = extendedProtectionElement.GetCollection();
-
-                ConfigurationElement spnElement = extendedProtectionCollection.CreateElement("spn");
-                spnElement["name"] = @"HTTP/www.contoso.com";
-                extendedProtectionCollection.Add(spnElement);
-
-                ConfigurationElement spnElement1 = extendedProtectionCollection.CreateElement("spn");
-                spnElement1["name"] = @"HTTP/contoso.com";
-                extendedProtectionCollection.Add(spnElement1);
-
-                server.CommitChanges();
-
-                ConfigurationSection rulesSection = config.GetSection("system.webServer/rewrite/rules");
-                ConfigurationElementCollection rulesCollection = rulesSection.GetCollection();
-                Assert.Equal(1, rulesCollection.Count);
-
-                ConfigurationElement ruleElement = rulesCollection[0];
-                Assert.Equal("lextudio2", ruleElement["name"]);
-#if IIS
-                Assert.Equal(0, ruleElement["patternSyntax"]);
-#else
-                Assert.Equal(0L, ruleElement["patternSyntax"]);
-#endif
-                Assert.Equal(true, ruleElement["stopProcessing"]);
-
-                ConfigurationElement matchElement = ruleElement.GetChildElement("match");
-                Assert.Equal(@"(.*)", matchElement["url"]);
-
-                ConfigurationElement actionElement = ruleElement.GetChildElement("action");
-#if IIS
-                Assert.Equal(1, actionElement["type"]);
-#else
-                Assert.Equal(1L, actionElement["type"]);
-#endif
-                Assert.Equal("/www/{R:0}", actionElement["url"]);
-            }
+         
+             
 
             // remove application pool
             Assert.False(server.ApplicationPools.AllowsRemove);
-            Assert.Equal(5, server.ApplicationPools.Count);
+            Assert.Equal(9, server.ApplicationPools.Count);
             server.ApplicationPools.RemoveAt(4);
-            Assert.Equal(4, server.ApplicationPools.Count);
+            Assert.Equal(8, server.ApplicationPools.Count);
 
             // remove binding
-            server.Sites[1].Bindings.RemoveAt(1);
+            server.Sites[1].Bindings.RemoveAt(0);
 
             // remove site
-            server.Sites.RemoveAt(4);
+            server.Sites.RemoveAt(3);
 
             // remove application
-            var site1 = server.Sites[9];
-            site1.Applications.RemoveAt(1);
+            var site1 = server.Sites[2];
+            site1.Applications.RemoveAt(0);
 
             // remove virtual directory
-            var application = server.Sites[2].Applications[0];
+            var application = server.Sites[1].Applications[0];
             application.VirtualDirectories.RemoveAt(1);
 
             server.CommitChanges();

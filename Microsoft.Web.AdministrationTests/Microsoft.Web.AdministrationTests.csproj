@@ -72,7 +72,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="BindingFixture\applicationHost.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="JexusManager.snk" />
     <None Include="packages.config" />

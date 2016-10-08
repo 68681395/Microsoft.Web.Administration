@@ -17,6 +17,7 @@ namespace Microsoft.Web.Administration
         private string _host;
 
         private bool _initialized;
+        private bool _isIpPortHostBinding;
 
         public Binding(ConfigurationElement element, BindingCollection parent)
             : base(element, null, null, parent, null, null)
@@ -85,7 +86,7 @@ namespace Microsoft.Web.Administration
             this.IsIPPortHostBinding = false;
             this._host = string.Empty;
             this._endPoint = null;
-            var bindingInfo = (string) this["bindingInformation"];
+            var bindingInfo = (string)this["bindingInformation"];
             if (string.IsNullOrEmpty(bindingInfo))
             {
                 return;
@@ -177,7 +178,14 @@ namespace Microsoft.Web.Administration
         }
 
         // ReSharper disable once InconsistentNaming
-        public bool IsIPPortHostBinding { get; internal set; }
+        public bool IsIPPortHostBinding
+        {
+            get {
+                Initialize();
+                return _isIpPortHostBinding;
+            }
+            internal set { _isIpPortHostBinding = value; }
+        }
 
         public string Protocol
         {
@@ -263,7 +271,7 @@ namespace Microsoft.Web.Management.Utility
             string text = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 0);
             string s = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 1);
             hostHeader = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 2);
-            int port = 0;
+            int port;
             if (int.TryParse(s, out port))
             {
                 try
@@ -282,6 +290,8 @@ namespace Microsoft.Web.Management.Utility
                 {
                 }
             }
+            
+
             return result;
         }
 

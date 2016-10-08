@@ -47,7 +47,7 @@ namespace Microsoft.Web.Administration
             {
                 var attribute = GetAttribute("directory");
                 return attribute.IsInheritedFromDefaultValue
-                    ? _logFile.Directory
+                    ? _logFile?.Directory
                     : (string)attribute.Value;
             }
 
