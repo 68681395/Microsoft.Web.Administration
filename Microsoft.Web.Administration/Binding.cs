@@ -40,8 +40,8 @@ namespace Microsoft.Web.Administration
         {
             return string.Format(
                 "{0}:{1}:{2}",
-                this.EndPoint.Address.AddressToDisplay(),
-                EndPoint.Port,
+                this.EndPoint?.Address?.AddressToDisplay(),
+                EndPoint?.Port,
                 Host.HostToDisplay());
         }
 
@@ -101,6 +101,8 @@ namespace Microsoft.Web.Administration
                     this._endPoint = iPEndPoint;
                     this.IsIPPortHostBinding = true;
                 }
+                else
+                    this._endPoint = new IPEndPoint(IPAddress.Any, 80);
             }
         }
 
@@ -114,10 +116,7 @@ namespace Microsoft.Web.Administration
             _initialized = true;
 
             LoadBindingInfo();
-            if (!this.IsHttp || !this.IsHttps)
-            {
-                return;
-            }
+
             //var value = (string)this["bindingInformation"];
             //var last = value.LastIndexOf(':');
             //_host = value.Substring(last + 1);
@@ -180,7 +179,8 @@ namespace Microsoft.Web.Administration
         // ReSharper disable once InconsistentNaming
         public bool IsIPPortHostBinding
         {
-            get {
+            get
+            {
                 Initialize();
                 return _isIpPortHostBinding;
             }
@@ -223,14 +223,18 @@ namespace Microsoft.Web.Administration
 
         internal string ToUri()
         {
-            var address = EndPoint.Address.Equals(IPAddress.Any)
-                ? Parent.Parent.Parent.Parent.HostName.ExtractName()
-                : EndPoint.AddressFamily == AddressFamily.InterNetwork
-                    ? EndPoint.Address.ToString()
-                    : string.Format("[{0}]", EndPoint.Address);
+            var address = Host;
+            if (string.IsNullOrEmpty(address))
+            {
+                address = IPAddress.Any.Equals(EndPoint?.Address)
+               ? Parent.Parent.Parent.Parent.HostName.ExtractName()
+               : EndPoint?.AddressFamily == AddressFamily.InterNetwork
+                   ? EndPoint?.Address?.ToString()
+                   : string.Format("[{0}]", EndPoint?.Address);
+            } 
             return IsDefaultPort
                 ? string.Format("{0}://{1}", Protocol, address)
-                : string.Format("{0}://{1}:{2}", Protocol, address, EndPoint.Port);
+                : string.Format("{0}://{1}:{2}", Protocol, address, EndPoint?.Port);
         }
 
         private bool IsDefaultPort
@@ -241,11 +245,12 @@ namespace Microsoft.Web.Administration
                 {
                     return EndPoint.Port == 80;
                 }
-
-                if (Protocol == "https")
+                else if (Protocol == "https")
                 {
                     return EndPoint.Port == 443;
                 }
+                else if (Protocol == "ftp")
+                    return EndPoint.Port == 21;
 
                 return false;
             }
@@ -259,30 +264,24 @@ namespace Microsoft.Web.Management.Utility
 {
     internal static class BindingUtility
     {
-        public static IPEndPoint EndPointFromBindingInformation(string bindingInformation)
-        {
-            string empty = string.Empty;
-            return BindingUtility.EndPointFromBindingInformation(bindingInformation, out empty);
-        }
 
         public static IPEndPoint EndPointFromBindingInformation(string bindingInformation, out string hostHeader)
         {
             IPEndPoint result = null;
-            string text = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 0);
-            string s = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 1);
-            hostHeader = BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, 2);
+            string strIp, strPort;
+            BindingUtility.ParseIPInfoFromBindingInformation(bindingInformation, out strIp, out strPort, out hostHeader);
             int port;
-            if (int.TryParse(s, out port))
+            if (int.TryParse(strPort, out port))
             {
                 try
                 {
-                    if (text == "*" || string.IsNullOrEmpty(text))
+                    if (strIp == "*" || string.IsNullOrEmpty(strIp))
                     {
                         result = new IPEndPoint(IPAddress.Any, port);
                     }
                     else
                     {
-                        IPAddress address = IPAddress.Parse(text);
+                        IPAddress address = IPAddress.Parse(strIp);
                         result = new IPEndPoint(address, port);
                     }
                 }
@@ -290,7 +289,7 @@ namespace Microsoft.Web.Management.Utility
                 {
                 }
             }
-            
+
 
             return result;
         }

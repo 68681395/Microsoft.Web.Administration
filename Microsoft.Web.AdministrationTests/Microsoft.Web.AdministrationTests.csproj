@@ -68,7 +68,7 @@
     <Compile Include="BindingFixture\BindingTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="BindingFixture\TestCases.cs" />
-    <Compile Include="WorkerProcessState.cs" />
+    <Compile Include="ConsoleRedirector.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="BindingFixture\applicationHost.config">
