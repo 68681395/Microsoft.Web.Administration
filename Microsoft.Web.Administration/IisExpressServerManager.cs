@@ -28,9 +28,8 @@ namespace Microsoft.Web.Administration
         internal override async Task<bool> GetSiteStateAsync(Site site)
         {
             var items = Process.GetProcessesByName("iisexpress");
-            var found = items.Where(item =>
-                item.GetCommandLine().EndsWith(site.CommandLine, StringComparison.Ordinal));
-            return found.Any();
+            return  items.Any(item => site.CommandLine.EndsWith(item.GetCommandLine(), StringComparison.Ordinal));
+           // return found.Any();
         }
 
         internal override async Task<bool> GetPoolStateAsync(ApplicationPool pool)
