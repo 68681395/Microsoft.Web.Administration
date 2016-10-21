@@ -1,4 +1,4 @@
-﻿﻿// Copyright (c) Lex Li. All rights reserved. 
+﻿// Copyright (c) Lex Li. All rights reserved. 
 //  
 // Licensed under the MIT license. See LICENSE file in the project root for full license information. 
 
@@ -28,8 +28,9 @@ namespace Microsoft.Web.Administration
         internal override async Task<bool> GetSiteStateAsync(Site site)
         {
             var items = Process.GetProcessesByName("iisexpress");
-            return  items.Any(item => site.CommandLine.EndsWith(item.GetCommandLine(), StringComparison.Ordinal));
-           // return found.Any();
+            return items.Any(item =>
+         item.GetCommandLine().EndsWith(site.CommandLine, StringComparison.Ordinal));
+            // return found.Any();
         }
 
         internal override async Task<bool> GetPoolStateAsync(ApplicationPool pool)
