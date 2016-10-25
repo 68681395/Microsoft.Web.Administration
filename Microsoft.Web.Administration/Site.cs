@@ -19,7 +19,7 @@ namespace Microsoft.Web.Administration
     using System.Xml;
     public sealed class Site : ConfigurationElement
     {
-        private const string command = "/config:\"{0}\" /siteid:{1} /systray:false /trace:error";
+        private const string command = "/config:\"{0}\" /siteid:{1} /systray:true /trace:error";
         private ApplicationCollection _collection;
         private BindingCollection _bindings;
         private SiteLogFile _logFile;
