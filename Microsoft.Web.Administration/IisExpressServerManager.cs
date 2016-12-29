@@ -69,9 +69,21 @@ namespace Microsoft.Web.Administration
                     WindowStyle = ProcessWindowStyle.Hidden,
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    RedirectStandardOutput = true
+                    RedirectStandardOutput = true,
                 }
             };
+
+            var path =
+                    site.Applications[0].VirtualDirectories[0]
+                        .PhysicalPath.ExpandIisExpressEnvironmentVariables();
+            process.StartInfo.EnvironmentVariables["LAUNCHER_PATH"] = "dotnet";
+            process.StartInfo.EnvironmentVariables["LAUNCHER_ARGS"] = $"./bin/Debug/netcoreapp1.0/{Path.GetFileName(path)}.dll";
+            //var vars = Environment.GetEnvironmentVariables();
+            //foreach (var key in vars.Keys)
+            //{
+            //    process.StartInfo.EnvironmentVariables[key.ObjectToString()]= vars[key].ObjectToString();
+            //}
+
             try
             {
                 process.Start();
