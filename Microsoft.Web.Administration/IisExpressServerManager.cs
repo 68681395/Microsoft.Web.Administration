@@ -40,6 +40,8 @@ namespace Microsoft.Web.Administration
 
         internal override async Task StartAsync(Site site)
         {
+            //site.
+
             var name = site.Applications[0].ApplicationPoolName;
             var pool = ApplicationPools.FirstOrDefault(item => item.Name == name);
             var fileName =
