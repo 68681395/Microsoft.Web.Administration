@@ -2,6 +2,8 @@
 //  
 // Licensed under the MIT license. See LICENSE file in the project root for full license information. 
 
+
+using Microsoft.Build.Evaluation;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -38,10 +40,9 @@ namespace Microsoft.Web.Administration
             return true;
         }
 
+        private ProjectCollection projects = new ProjectCollection();
         internal override async Task StartAsync(Site site)
         {
-            //site.
-
             var name = site.Applications[0].ApplicationPoolName;
             var pool = ApplicationPools.FirstOrDefault(item => item.Name == name);
             var fileName =
@@ -59,18 +60,34 @@ namespace Microsoft.Web.Administration
                     "IIS Express",
                     "iisexpress.exe");
             }
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = site.CommandLine,
+                WindowStyle = ProcessWindowStyle.Hidden,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true
+            };
 
+            var projectPath = site.Applications[0].VirtualDirectories[0].PhysicalPath.ExpandIisExpressEnvironmentVariables();
+            var projectFullPath = Directory.EnumerateFiles(projectPath, "*.*proj").Where(x=>x.Contains(site.Name)).FirstOrDefault();
+            if (!string.IsNullOrEmpty(projectFullPath))
+            { 
+                var p = projects.LoadProject(projectFullPath);
+                
+                foreach (var i in p.Properties)
+                {
+                    Debug.WriteLine($"{i.Name} \t={i.EvaluatedValue}");
+                }
+            }
+
+
+            startInfo.EnvironmentVariables["LAUNCHER_PATH"] = "";
+            startInfo.EnvironmentVariables["LAUNCHER_ARGS"] = "";
             var process = new Process
             {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = fileName,
-                    Arguments = site.CommandLine,
-                    WindowStyle = ProcessWindowStyle.Hidden,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true
-                }
+                StartInfo = startInfo
             };
             try
             {
