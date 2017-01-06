@@ -3,9 +3,9 @@
 // Licensed under the MIT license. See LICENSE file in the project root for full license information. 
 
 
-using Microsoft.Build.Evaluation;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -40,7 +40,6 @@ namespace Microsoft.Web.Administration
             return true;
         }
 
-        private ProjectCollection projects = new ProjectCollection();
         internal override async Task StartAsync(Site site)
         {
             var name = site.Applications[0].ApplicationPoolName;
@@ -70,21 +69,13 @@ namespace Microsoft.Web.Administration
                 RedirectStandardOutput = true
             };
 
-            var projectPath = site.Applications[0].VirtualDirectories[0].PhysicalPath.ExpandIisExpressEnvironmentVariables();
-            var projectFullPath = Directory.EnumerateFiles(projectPath, "*.*proj").Where(x=>x.Contains(site.Name)).FirstOrDefault();
-            if (!string.IsNullOrEmpty(projectFullPath))
-            { 
-                var p = projects.LoadProject(projectFullPath);
-                
-                foreach (var i in p.Properties)
-                {
-                    Debug.WriteLine($"{i.Name} \t={i.EvaluatedValue}");
-                }
+            var evs = GetEnvironmentVariables(site);
+            if (evs != null)
+            {
+                startInfo.EnvironmentVariables["LAUNCHER_PATH"] = evs.Item1;
+                startInfo.EnvironmentVariables["LAUNCHER_ARGS"] = evs.Item2;
             }
 
-
-            startInfo.EnvironmentVariables["LAUNCHER_PATH"] = "";
-            startInfo.EnvironmentVariables["LAUNCHER_ARGS"] = "";
             var process = new Process
             {
                 StartInfo = startInfo
@@ -109,6 +100,62 @@ namespace Microsoft.Web.Administration
             {
                 site.State = process.HasExited ? ObjectState.Stopped : ObjectState.Started;
             }
+        }
+
+        private static Tuple<string, string> GetEnvironmentVariables(Site site)
+        {
+            var filename = site.GetWebConfiguration()?.FileContext?.FileName;
+            if (File.Exists(filename))
+            {
+                var webconfig = ConfigurationManager.OpenMappedExeConfiguration(new ExeConfigurationFileMap() { ExeConfigFilename = filename }, ConfigurationUserLevel.None);
+
+                var lunch = webconfig.AppSettings?.Settings["Jexus_LAUNCHER_PATH"]?.Value;
+                var args = webconfig.AppSettings?.Settings["Jexus_LAUNCHER_ARGS"]?.Value;
+                if (!string.IsNullOrEmpty(lunch) || !string.IsNullOrEmpty(args))
+                {
+                    return Tuple.Create(lunch, args);
+                }
+            }
+
+            var projectPath = site.Applications[0].VirtualDirectories[0].PhysicalPath.ExpandIisExpressEnvironmentVariables();
+            var binPath = Path.Combine(projectPath, "bin");
+            var folderName = new DirectoryInfo(projectPath).Name;
+            // search dll of the project folder name
+            var targetFiles = Directory.EnumerateFiles(binPath, $"{folderName}.dll", SearchOption.AllDirectories);
+            if (targetFiles.Any())
+            {
+                //netcore for cross platform
+                return Tuple.Create("dotnet", targetFiles.LastOrDefault());
+            }
+            else
+            {
+                // search exe of the project folder name
+                targetFiles = Directory.EnumerateFiles(binPath, $"{folderName}.exe", SearchOption.AllDirectories);
+                if (targetFiles.Any())
+                {
+                    //netcore for windows
+                    return Tuple.Create(targetFiles.LastOrDefault(x => File.Exists(x + ".config")), "");
+                }
+            }
+            // search dll of the site name 
+            targetFiles = Directory.EnumerateFiles(binPath, $"{site.Name}.dll", SearchOption.AllDirectories);
+            if (targetFiles.Any())
+            {
+                //netcore for cross platform
+                return Tuple.Create("dotnet", targetFiles.LastOrDefault());
+            }
+            else
+            {
+                // search exe of the site name 
+                targetFiles = Directory.EnumerateFiles(binPath, $"{site.Name}.exe", SearchOption.AllDirectories);
+                if (targetFiles.Any())
+                {
+                    //netcore for windows
+                    return Tuple.Create(targetFiles.LastOrDefault(x => File.Exists(x + ".config")), "");
+                }
+            }
+
+            return null;
         }
 
         internal override async Task StopAsync(Site site)
